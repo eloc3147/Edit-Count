@@ -1,0 +1,58 @@
+progress, progress[role] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  border: none;
+  background-size: auto;
+  height: 25px;
+  width: 100%;
+  display: block;
+}
+
+.barwrapper {
+  position: relative;
+}
+
+#label {
+  color: #ffffff;
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, 0);
+}
+
+.deleted {
+  direction: rtl;
+  position: relative;
+  top: -25px;
+}
+
+.name-row{
+  width: 200px;
+}
+.prog-row {
+  width: 50px;
+}
+
+.bar-row {
+  display: block;
+  height: 25px;
+}
+
+/* Edited progress bar colour */
+.edited::-webkit-progress-value {
+  background: #2ecc71;
+}
+
+/* Edited progress background colour */
+.edited::-webkit-progress-bar {
+  background-color: #7f8c8d;
+}
+
+/* Deleted progress bar colour */
+.deleted::-webkit-progress-value {
+  background: #e74c3c;
+}
+
+/* Deleted progress background colour */
+.deleted::-webkit-progress-bar {
+  background: rgba(0,0,0,0);
+}

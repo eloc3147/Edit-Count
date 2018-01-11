@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Photo Progress</title>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  </head>
+
+  <body>
+    <div class="container">
+      <h1>Photo Progress</h1>
+
+      <div class="barcontainer">
+        <h6 id="toalprogress"></h6>
+        <div class="labelwrapper">
+          <b id="label"></b>
+          <progress class="edited" max="0" value="0" id="totaledited"></progress>
+          <progress class="deleted" max="0" value="0" id="totaldeleted"></progress>
+        </div>
+        <br>
+      </div>
+
+      <h4>In Progress</h4>
+      <table class="u-full-width">
+        <thead>
+          <tr>
+            <th>Album</th>
+            <th>Progress</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="table_ip">
+        </tbody>
+      </table>
+      <h4>Completed</h4>
+      <table class="u-full-width">
+        <thead>
+          <tr>
+            <th>Album</th>
+            <th>Progress</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="table_complete">
+        </tbody>
+      </table>
+    </div>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/skeleton/2.0.4/skeleton.min.css" integrity="sha256-2YQRJMXD7pIAPHiXr0s+vlRWA7GYJEK0ARns7k2sbHY=" crossorigin="anonymous" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" crossorigin="anonymous"></script>
+    <script src="photo_data.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
