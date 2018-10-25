@@ -1,0 +1,9 @@
+[package]
+name = "edit_count"
+version = "0.1.0"
+authors = ["Kinnon McAlister <kinnonmcalister@gmail.com>"]
+
+[dependencies]
+iron = "0.6"
+staticfile = "0.5"
+mount = "0.4"
