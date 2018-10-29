@@ -38,10 +38,10 @@ pub fn update_counts(counts: Arc<Mutex<Counts>>, group: DirectoryGroup) -> Resul
     // Count images
     let mut raw_images = ImageList::new();
     let mut render_images = ImageList::new();
-    for dir in group.raw_dirs.iter() {
+    for dir in &group.raw_dirs {
         scan_directory(&dir, &mut raw_images)?;
     }
-    for dir in group.render_dirs.iter() {
+    for dir in &group.render_dirs {
         scan_directory(&dir, &mut render_images)?;
     }
 

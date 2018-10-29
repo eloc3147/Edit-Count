@@ -14,12 +14,13 @@ fn exe_dir() -> Result<PathBuf, Box<Error>> {
     };
     let static_path = match exe_path.parent() {
         Some(path) => path,
-        None => return Err(format!("Unable to find executable directory path").into()),
+        None => return Err("Unable to find executable directory path".into()),
     };
-    return Ok(static_path.into());
+
+    Ok(static_path.into())
 }
 
-pub fn new(address: &String) -> Result<Listening, Box<Error>> {
+pub fn new(address: &str) -> Result<Listening, Box<Error>> {
     let static_path = exe_dir()?.join("static");
     
     let mut mount = Mount::new();
