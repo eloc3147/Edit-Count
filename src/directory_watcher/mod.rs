@@ -1,6 +1,9 @@
-use std::path::PathBuf;
-use std::error::Error;
+pub mod directory_layout;
+
+use self::directory_layout::DirectoryLayout;
 use std::collections::HashMap;
+use std::error::Error;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 
@@ -22,8 +25,7 @@ pub struct Count {
 
 pub type Counts = HashMap<String, Count>;
 
-
-fn scan_directory(dir: &PathBuf, list: &mut ImageList) -> Result<(), Box<Error>> {
+fn scan_directory(dir: &Path, list: &mut ImageList) -> Result<(), Box<Error>> {
     for item in dir.read_dir()? {
         let item = item?.path();
         if item.is_file() {
@@ -55,4 +57,15 @@ pub fn update_counts(counts: Arc<Mutex<Counts>>, group: DirectoryGroup) -> Resul
     counts.lock().unwrap().insert(group.name, count);
 
     Ok(())
+}
+
+#[derive(Debug)]
+pub struct DirectoryWatcher {
+    layout: DirectoryLayout,
+}
+
+impl DirectoryWatcher {
+    pub fn new(layout: DirectoryLayout) -> Self {
+        DirectoryWatcher { layout }
+    }
 }

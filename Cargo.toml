@@ -4,6 +4,12 @@ version = "0.1.0"
 authors = ["Kinnon McAlister <kinnonmcalister@gmail.com>"]
 
 [dependencies]
-iron = "0.6"
-staticfile = "0.5"
-mount = "0.4"
+iron = "^0.6"
+staticfile = "^0.5"
+mount = "^0.4"
+app_dirs = "^1.2.1"
+config = "^0.9.1"
+serde = "^1.0"
+serde_derive = "^1.0"
+lazy_static = "^1.2.0"
+regex = "^1"
