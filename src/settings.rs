@@ -1,9 +1,11 @@
 use super::directory_watcher::directory_layout::DirectoryLayout;
 use config::{Config, ConfigError, File};
+use serde_derive::Deserialize;
 use std::path::PathBuf;
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
+    pub watch_frequency: u64,
     pub directory_layout: DirectoryLayout,
 }
 

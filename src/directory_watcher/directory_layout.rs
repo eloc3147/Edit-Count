@@ -1,5 +1,7 @@
+use lazy_static::lazy_static;
 use regex::{Captures, Regex};
 use serde::de::{self, Deserialize, Deserializer};
+use serde_derive::Deserialize;
 use std::error;
 use std::fmt;
 use std::path::PathBuf;
@@ -13,9 +15,14 @@ pub struct LayoutError {
 }
 
 impl LayoutError {
-    pub fn new(path: Option<&String>, start: usize, length: Option<usize>, message: &str) -> LayoutError {
+    pub fn new(
+        path: Option<&str>,
+        start: usize,
+        length: Option<usize>,
+        message: &str,
+    ) -> LayoutError {
         LayoutError {
-            path: path.map_or(None, |p| Some(p.clone())),
+            path: path.and_then(|p| Some(p.to_owned())),
             start,
             length,
             message: String::from(message),
@@ -25,20 +32,15 @@ impl LayoutError {
 
 impl fmt::Display for LayoutError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "{}", "Error loading layout.");
+        writeln!(f, "Error loading layout.").unwrap();
         if let Some(ref path) = self.path {
-            writeln!(f, " | {}", path);
+            writeln!(f, " | {}", path).unwrap();
         }
         if let Some(length) = self.length {
-            writeln!(
-                f,
-                " | {}{}",
-                " ".repeat(self.start),
-                "^".repeat(length)
-            );
+            writeln!(f, " | {}{}", " ".repeat(self.start), "^".repeat(length)).unwrap();
         }
-        writeln!(f, "{}", self.message);
-        
+        writeln!(f, "{}", self.message).unwrap();
+
         Ok(())
     }
 }
@@ -56,15 +58,12 @@ impl error::Error for LayoutError {
 #[derive(Debug, Deserialize)]
 pub struct DirectoryLayout {
     #[serde(deserialize_with = "deserialize_dirs")]
-    raw_dirs: Vec<DirectoryPath>,
+    pub raw_dirs: Vec<DirectoryPath>,
     #[serde(deserialize_with = "deserialize_dirs")]
-    render_dirs: Vec<DirectoryPath>,
+    pub render_dirs: Vec<DirectoryPath>,
 }
 
-#[derive(Debug)]
-pub struct DirectoryPath {
-    path: Vec<PathComponent>,
-}
+pub type DirectoryPath = Vec<PathComponent>;
 
 #[derive(Debug)]
 pub enum PathComponent {
@@ -75,18 +74,18 @@ pub enum PathComponent {
 
 #[derive(Debug)]
 pub struct Group {
-    depth: Option<usize>,
+    pub depth: usize,
 }
 
 #[derive(Debug)]
 pub struct Album {
-    min: usize,
-    max: Option<usize>,
-    tipe: AlbumType,
+    pub min: usize,
+    pub max: usize,
+    pub tipe: AlbumType,
 }
 
 #[derive(Debug)]
-enum AlbumType {
+pub enum AlbumType {
     Single,
     Depth,
     Range,
@@ -99,21 +98,20 @@ where
     let unparsed: Vec<String> = Deserialize::deserialize(deserializer)?;
     let mut parsed: Vec<DirectoryPath> = Vec::with_capacity(unparsed.len());
     for p in unparsed {
-        parsed.push(parse_path(p).map_err(de::Error::custom)?);
+        parsed.push(parse_path(&p).map_err(de::Error::custom)?);
     }
 
     Ok(parsed)
 }
 
-fn parse_path(s: String) -> Result<DirectoryPath, LayoutError> {
+fn parse_path(s: &str) -> Result<DirectoryPath, LayoutError> {
     lazy_static! {
         static ref ALBUM_PATTERN: Regex =
             Regex::new(r"\[A(?P<min>\d+)?(?P<dot>.(?P<max>\d+)?)?\]").unwrap();
-        static ref GROUP_PATTERN: Regex =
-            Regex::new(r"\[G(?P<depth>\d+)?\]").unwrap();
+        static ref GROUP_PATTERN: Regex = Regex::new(r"\[G(?P<depth>\d+)?\]").unwrap();
     }
 
-    let mut path = Vec::new();
+    let mut path = DirectoryPath::new();
     let mut path_cache = PathBuf::new();
     let mut cache_empty = true;
     let mut index = 0;
@@ -124,7 +122,6 @@ fn parse_path(s: String) -> Result<DirectoryPath, LayoutError> {
 
         // Operator
         if op_string.starts_with('[') && op_string.ends_with(']') {
-
             // Dump path cache
             if !cache_empty {
                 path.push(PathComponent::Dir(path_cache));
@@ -139,9 +136,9 @@ fn parse_path(s: String) -> Result<DirectoryPath, LayoutError> {
                     Err(_) => 1,
                 };
 
-                let max: Option<usize> = match get_key(&captures, "max").parse() {
-                    Ok(i) => Some(i),
-                    Err(_) => None,
+                let max: usize = match get_key(&captures, "max").parse() {
+                    Ok(i) => i,
+                    Err(_) => usize::max_value(),
                 };
 
                 let tipe: AlbumType;
@@ -158,9 +155,9 @@ fn parse_path(s: String) -> Result<DirectoryPath, LayoutError> {
 
             // Group operator
             } else if let Some(captures) = GROUP_PATTERN.captures(op_string) {
-                let depth: Option<usize> = match get_key(&captures, "dot").parse() {
-                    Ok(i) => Some(i),
-                    Err(_) => None,
+                let depth: usize = match get_key(&captures, "depth").parse() {
+                    Ok(i) => i,
+                    Err(_) => 1,
                 };
 
                 component = PathComponent::Group(Group { depth });
@@ -168,7 +165,7 @@ fn parse_path(s: String) -> Result<DirectoryPath, LayoutError> {
             // Invalid operator
             } else {
                 return Err(LayoutError::new(
-                    Some(&s),
+                    Some(s),
                     index,
                     Some(op_string.len()),
                     "Invalid operator.\nSee README.md for correct operator usage.",
@@ -176,13 +173,18 @@ fn parse_path(s: String) -> Result<DirectoryPath, LayoutError> {
             }
 
             path.push(component);
-        
+
         // Path
         } else {
-            // Fix windows drive letter path being relative
             let mut path_string = String::from(op_string);
-            if path_string.ends_with(':') {
-                path_string.push('\\');
+
+            // Make paths absolute
+            if path.is_empty() && cache_empty {
+                if cfg!(windows) {
+                    path_string += "\\";
+                } else {
+                    path_string = format!("/{}", path_string);
+                }
             }
             path_cache.push(path_string);
             cache_empty = false;
@@ -206,11 +208,11 @@ fn parse_path(s: String) -> Result<DirectoryPath, LayoutError> {
         ));
     }
 
-    Ok(DirectoryPath { path })
+    Ok(path)
 }
 
 fn get_key(caps: &Captures, key: &str) -> String {
-     match caps.name(key) {
+    match caps.name(key) {
         Some(s) => s.as_str().into(),
         None => "".into(),
     }
