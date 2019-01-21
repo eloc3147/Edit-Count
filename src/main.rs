@@ -1,13 +1,15 @@
 mod directory_watcher;
 mod settings;
 mod ui_server;
+mod worker;
 
-use crate::directory_watcher::directory_layout::DirectoryLayout;
 use crate::directory_watcher::DirectoryWatcher;
 use crate::settings::Settings;
 use crate::ui_server::UIServer;
+use crate::worker::Worker;
 use app_dirs::{app_root, AppDataType, AppInfo};
 use std::error::Error;
+use std::sync::mpsc::channel;
 use std::sync::Arc;
 
 fn main() -> Result<(), Box<Error>> {
@@ -19,16 +21,22 @@ fn main() -> Result<(), Box<Error>> {
 
     // Load settings
     let settings = Settings::new(&settings_root)?;
+    let settings = Arc::new(settings);
+
+    // Scan directories
+    let (cue_tx, cue_rx) = channel();
+    let watcher = DirectoryWatcher::new(settings.clone(), cue_tx).start();
 
     // Start web interface
     let address = String::from("127.0.0.1:2183");
     let _ = UIServer::launch(address.clone());
     println!("Server started at {}", address);
 
-    // Scan directories
-    let layout: Arc<DirectoryLayout> = Arc::new(settings.directory_layout);
-    let watcher = DirectoryWatcher::launch(settings.watch_frequency, layout.clone())?;
-    watcher.join();
+    while let Ok(event) = cue_rx.recv() {
+        println!("{:?}", event);
+    }
+
+    watcher.wait();
 
     Ok(())
 }

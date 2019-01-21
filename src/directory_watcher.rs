@@ -1,44 +1,96 @@
+pub mod counter;
 pub mod crawler;
 pub mod directory_layout;
 pub mod listener;
 
+use self::counter::Counter;
 use self::crawler::Crawler;
-use self::directory_layout::DirectoryLayout;
 use self::listener::{Listener, ListenerEvent};
-use std::error::Error;
-use std::sync::mpsc::{channel, Receiver};
+use crate::settings::Settings;
+use crate::worker::Worker;
+use std::ffi::OsString;
+use std::path::PathBuf;
+use std::sync::mpsc::{channel, Sender};
 use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct DirectoryWatcher {
-    layout: Arc<DirectoryLayout>,
-    crawler: Crawler,
-    listener: Listener,
-    listener_rx: Receiver<ListenerEvent>,
+    settings: Arc<Settings>,
+    cue_tx: Sender<CountUpdateEvent>,
 }
 
 impl DirectoryWatcher {
-    pub fn launch(
-        watcher_frequency: u64,
-        layout: Arc<DirectoryLayout>,
-    ) -> Result<Self, Box<Error>> {
+    pub fn new(settings: Arc<Settings>, cue_tx: Sender<CountUpdateEvent>) -> DirectoryWatcher {
+        DirectoryWatcher { settings, cue_tx }
+    }
+}
+
+impl Worker for DirectoryWatcher {
+    type W = DirectoryWatcher;
+    const NAME: &'static str = "Directory Watcher";
+
+    fn work(self) {
         let (listener_tx, listener_rx) = channel();
-        let listener = Listener::launch(watcher_frequency, layout.clone(), listener_tx)?;
-        let crawler = Crawler::launch(layout.clone());
+        let (due_tx, due_rx) = channel();
 
-        Ok(DirectoryWatcher {
-            layout,
-            crawler,
-            listener,
-            listener_rx,
-        })
-    }
+        let listener = Listener::launch(self.settings.clone(), listener_tx).unwrap();
+        let crawler = Crawler::launch(self.settings.clone(), due_tx.clone());
 
-    pub fn join(self) {
-        while let Ok(event) = self.listener_rx.recv() {
-            println!("===  {:#?}", event);
+        let counter = Counter::new(due_rx, self.cue_tx);
+        let tree = counter.get_tree_reference();
+        let counter = counter.start();
+
+        while let Ok(listener_event) = listener_rx.recv() {
+            match listener_event {
+                ListenerEvent::Exist(path) => {
+                    due_tx.send(DirectoryUpdateEvent::Exist(path)).unwrap()
+                }
+                ListenerEvent::Remove(path) => {
+                    due_tx.send(DirectoryUpdateEvent::Remove(path)).unwrap()
+                }
+                ListenerEvent::Reload => {
+                    unimplemented!();
+                }
+            }
         }
-        self.crawler.join();
-        self.listener.join();
+
+        counter.wait();
+        listener.join();
+        crawler.join();
     }
+}
+
+#[derive(Debug)]
+pub enum DirectoryUpdateEvent {
+    Exist(PathBuf),
+    Remove(PathBuf),
+    Set(SetEvent),
+}
+
+#[derive(Debug)]
+pub struct SetEvent {
+    group_name: String,
+    album_name: String,
+    tipe: GroupType,
+    files: Vec<OsString>,
+}
+
+#[derive(Debug)]
+pub struct CountUpdateEvent {
+    group_name: String,
+    album_name: String,
+    count: Count,
+}
+
+#[derive(Debug)]
+pub struct Count {
+    total: usize,
+    raw: usize,
+    render: usize,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum GroupType {
+    Raw,
+    Render,
 }

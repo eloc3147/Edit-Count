@@ -1,7 +1,9 @@
-use super::directory_layout::{AlbumType, DirectoryLayout, PathComponent};
+use super::directory_layout::{AlbumType, PathComponent};
+use super::{DirectoryUpdateEvent, GroupType, SetEvent};
+use crate::settings::Settings;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{mpsc::Sender, Arc};
 use std::thread;
 
 #[derive(Debug)]
@@ -10,9 +12,9 @@ pub struct Crawler {
 }
 
 impl Crawler {
-    pub fn launch(directory_layout: Arc<DirectoryLayout>) -> Crawler {
+    pub fn launch(settings: Arc<Settings>, channel: Sender<DirectoryUpdateEvent>) -> Crawler {
         let handle = thread::spawn(|| {
-            CrawlWorker::launch(directory_layout);
+            CrawlWorker::launch(settings, channel);
         });
 
         Crawler { handle }
@@ -25,14 +27,14 @@ impl Crawler {
 
 #[derive(Debug)]
 struct CrawlWorker {
-    directory_layout: Arc<DirectoryLayout>,
+    settings: Arc<Settings>,
 }
 
 impl CrawlWorker {
-    pub fn launch(directory_layout: Arc<DirectoryLayout>) {
-        let worker = CrawlWorker { directory_layout };
+    pub fn launch(settings: Arc<Settings>, channel: Sender<DirectoryUpdateEvent>) {
+        let worker = CrawlWorker { settings };
         let tree = worker.build_tree();
-        println!("{:#?}", tree);
+        crawl_tree(tree, channel);
     }
 
     fn build_tree(&self) -> DirectoryTree {
@@ -40,10 +42,10 @@ impl CrawlWorker {
         let mut nonce = 0;
 
         let mut paths = Vec::new();
-        for path in self.directory_layout.raw_dirs.iter() {
+        for path in self.settings.directory_layout.raw_dirs.iter() {
             paths.push((GroupType::Raw, path));
         }
-        for path in self.directory_layout.render_dirs.iter() {
+        for path in self.settings.directory_layout.render_dirs.iter() {
             paths.push((GroupType::Render, path));
         }
 
@@ -52,7 +54,6 @@ impl CrawlWorker {
             let mut groups: Vec<NamedPath> = Vec::new();
             let mut filled_groups: Vec<(NamedPath, Vec<NamedPath>)> = Vec::new();
             for component in path {
-                println!("{:?}", component);
                 match component {
                     PathComponent::Group(group) => {
                         // Process group
@@ -151,23 +152,23 @@ impl CrawlWorker {
                     group.name
                 };
 
-                let mut album_map = Group::with_capacity(albums.len());
+                let mut album_map = HashMap::with_capacity(albums.len());
                 for album in albums {
                     album_map.insert(album.name, album.path);
                 }
 
-                target_groups.insert(group_name, album_map);
+                let final_group = Group {
+                    path: group.path,
+                    albums: album_map,
+                };
+
+                target_groups.insert(group_name, final_group);
             }
         }
 
         tree.nonce = nonce;
         tree
     }
-}
-
-enum GroupType {
-    Raw,
-    Render,
 }
 
 #[derive(Debug)]
@@ -187,12 +188,52 @@ impl DirectoryTree {
     }
 }
 
-type Group = HashMap<String, PathBuf>;
+#[derive(Debug)]
+struct Group {
+    path: PathBuf,
+    albums: HashMap<String, PathBuf>,
+}
 
 #[derive(Debug)]
 struct NamedPath {
     pub name: String,
     pub path: PathBuf,
+}
+
+fn crawl_tree(tree: DirectoryTree, tx: Sender<DirectoryUpdateEvent>) {
+    for (group_name, group) in tree.raw_groups {
+        crawl_group(GroupType::Raw, &group_name, group, &tx);
+    }
+    for (group_name, group) in tree.render_groups {
+        crawl_group(GroupType::Render, &group_name, group, &tx);
+    }
+}
+
+fn crawl_group(tipe: GroupType, group_name: &str, group: Group, tx: &Sender<DirectoryUpdateEvent>) {
+    for (album_name, album_path) in group.albums {
+        let mut files = Vec::new();
+        let contents = album_path.read_dir();
+
+        if contents.is_err() {
+            println!("Error reading folder {:?}: {:#?}", album_path, contents);
+        }
+
+        for file in contents.unwrap() {
+            match file {
+                Ok(f) => files.push(f.file_name()),
+                Err(e) => println!("Error reading file: {:#?}", e),
+            }
+        }
+
+        let event = SetEvent {
+            group_name: group_name.to_string(),
+            album_name,
+            tipe,
+            files,
+        };
+
+        tx.send(DirectoryUpdateEvent::Set(event)).unwrap();
+    }
 }
 
 fn deep_list(base: &PathBuf, filter_depth: usize, search_depth: usize) -> Vec<PathBuf> {

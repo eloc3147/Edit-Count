@@ -1,4 +1,5 @@
-use super::directory_layout::{DirectoryLayout, PathComponent};
+use super::directory_layout::PathComponent;
+use crate::settings::Settings;
 use notify::{watcher, DebouncedEvent, RecursiveMode, Watcher};
 use std::error::Error;
 use std::fmt;
@@ -20,10 +21,12 @@ impl fmt::Debug for Listener {
 
 impl Listener {
     pub fn launch(
-        watch_frequency: u64,
-        layout: Arc<DirectoryLayout>,
-        listener_tx: Sender<ListenerEvent>,
+        settings: Arc<Settings>,
+        listner_tx: Sender<ListenerEvent>,
     ) -> Result<Listener, Box<Error>> {
+        let layout = &settings.directory_layout;
+        let watch_frequency = settings.watch_frequency;
+
         // Build list of all watched base paths
         let mut watch_dirs = Vec::with_capacity(layout.raw_dirs.len() + layout.render_dirs.len());
 
@@ -39,7 +42,7 @@ impl Listener {
         }
 
         let handle = thread::spawn(move || {
-            ListnerWorker::launch(watch_frequency, watch_dirs, listener_tx);
+            ListnerWorker::launch(watch_frequency, watch_dirs, listner_tx);
         });
 
         Ok(Listener { handle })
@@ -72,11 +75,17 @@ impl ListnerWorker {
             println!("Event: {:#?}", event);
 
             match event {
-                DebouncedEvent::Create(path)
-                | DebouncedEvent::Write(path)
-                | DebouncedEvent::Rename(_, path) => {
+                DebouncedEvent::Create(path) | DebouncedEvent::Write(path) => {
                     worker_tx
                         .send(ListenerEvent::Exist(path))
+                        .expect("Listener send channel closed.");
+                }
+                DebouncedEvent::Rename(old_path, new_path) => {
+                    worker_tx
+                        .send(ListenerEvent::Remove(old_path))
+                        .expect("Listener send channel closed.");
+                    worker_tx
+                        .send(ListenerEvent::Exist(new_path))
                         .expect("Listener send channel closed.");
                 }
 
