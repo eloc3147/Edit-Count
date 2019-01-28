@@ -10,10 +10,10 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn new(config_dir: &PathBuf) -> Result<Self, ConfigError> {
+    pub fn from(config_file: PathBuf) -> Result<Self, ConfigError> {
         let mut s = Config::new();
 
-        s.merge(File::from(config_dir.join("settings.toml")))?;
+        s.merge(File::from(config_file))?;
 
         s.try_into()
     }

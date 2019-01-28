@@ -1,51 +1,26 @@
-use super::directory_layout::{AlbumType, PathComponent};
+use super::directory_layout::{AlbumType, DirectoryLayout, PathComponent};
 use super::{DirectoryUpdateEvent, GroupType, SetEvent};
-use crate::settings::Settings;
-use std::collections::HashMap;
+use crate::worker::Worker;
 use std::path::PathBuf;
-use std::sync::{mpsc::Sender, Arc};
-use std::thread;
+use std::sync::mpsc::Sender;
 
 #[derive(Debug)]
 pub struct Crawler {
-    handle: thread::JoinHandle<()>,
+    layout: DirectoryLayout,
+    due_tx: Sender<DirectoryUpdateEvent>,
 }
 
 impl Crawler {
-    pub fn launch(settings: Arc<Settings>, channel: Sender<DirectoryUpdateEvent>) -> Crawler {
-        let handle = thread::spawn(|| {
-            CrawlWorker::launch(settings, channel);
-        });
-
-        Crawler { handle }
+    pub fn new(layout: DirectoryLayout, due_tx: Sender<DirectoryUpdateEvent>) -> Crawler {
+        Crawler { layout, due_tx }
     }
 
-    pub fn join(self) {
-        self.handle.join().unwrap();
-    }
-}
-
-#[derive(Debug)]
-struct CrawlWorker {
-    settings: Arc<Settings>,
-}
-
-impl CrawlWorker {
-    pub fn launch(settings: Arc<Settings>, channel: Sender<DirectoryUpdateEvent>) {
-        let worker = CrawlWorker { settings };
-        let tree = worker.build_tree();
-        crawl_tree(tree, channel);
-    }
-
-    fn build_tree(&self) -> DirectoryTree {
-        let mut tree = DirectoryTree::new();
-        let mut nonce = 0;
-
+    fn crawl(&self) {
         let mut paths = Vec::new();
-        for path in self.settings.directory_layout.raw_dirs.iter() {
+        for path in self.layout.raw_dirs.iter() {
             paths.push((GroupType::Raw, path));
         }
-        for path in self.settings.directory_layout.render_dirs.iter() {
+        for path in self.layout.render_dirs.iter() {
             paths.push((GroupType::Render, path));
         }
 
@@ -139,101 +114,50 @@ impl CrawlWorker {
                     }
                 }
             }
-            let target_groups = match path_type {
-                GroupType::Raw => &mut tree.raw_groups,
-                GroupType::Render => &mut tree.render_groups,
-            };
 
             for (group, albums) in filled_groups {
-                let group_name = if target_groups.contains_key(&group.name) {
-                    nonce += 1;
-                    format!("{}\n{}", group.name, nonce)
-                } else {
-                    group.name
-                };
+                for NamedPath { name, path } in albums {
+                    let mut files = Vec::new();
+                    let contents = path.read_dir();
 
-                let mut album_map = HashMap::with_capacity(albums.len());
-                for album in albums {
-                    album_map.insert(album.name, album.path);
+                    if contents.is_err() {
+                        println!("Error reading folder {:?}: {:#?}", path, contents);
+                    }
+
+                    for file in contents.unwrap() {
+                        match file {
+                            Ok(f) => files.push(f.file_name()),
+                            Err(e) => println!("Error reading file: {:#?}", e),
+                        }
+                    }
+
+                    let event = SetEvent {
+                        group_name: group.name.to_string(),
+                        album_name: name,
+                        tipe: path_type,
+                        files,
+                    };
+
+                    self.due_tx.send(DirectoryUpdateEvent::Set(event)).unwrap();
                 }
-
-                let final_group = Group {
-                    path: group.path,
-                    albums: album_map,
-                };
-
-                target_groups.insert(group_name, final_group);
             }
         }
-
-        tree.nonce = nonce;
-        tree
     }
 }
 
-#[derive(Debug)]
-struct DirectoryTree {
-    raw_groups: HashMap<String, Group>,
-    render_groups: HashMap<String, Group>,
-    nonce: u64,
-}
+impl Worker for Crawler {
+    type W = Crawler;
+    const NAME: &'static str = "Crawler";
 
-impl DirectoryTree {
-    pub fn new() -> DirectoryTree {
-        DirectoryTree {
-            raw_groups: HashMap::new(),
-            render_groups: HashMap::new(),
-            nonce: 0,
-        }
+    fn work(self) {
+        self.crawl();
     }
-}
-
-#[derive(Debug)]
-struct Group {
-    path: PathBuf,
-    albums: HashMap<String, PathBuf>,
 }
 
 #[derive(Debug)]
 struct NamedPath {
     pub name: String,
     pub path: PathBuf,
-}
-
-fn crawl_tree(tree: DirectoryTree, tx: Sender<DirectoryUpdateEvent>) {
-    for (group_name, group) in tree.raw_groups {
-        crawl_group(GroupType::Raw, &group_name, group, &tx);
-    }
-    for (group_name, group) in tree.render_groups {
-        crawl_group(GroupType::Render, &group_name, group, &tx);
-    }
-}
-
-fn crawl_group(tipe: GroupType, group_name: &str, group: Group, tx: &Sender<DirectoryUpdateEvent>) {
-    for (album_name, album_path) in group.albums {
-        let mut files = Vec::new();
-        let contents = album_path.read_dir();
-
-        if contents.is_err() {
-            println!("Error reading folder {:?}: {:#?}", album_path, contents);
-        }
-
-        for file in contents.unwrap() {
-            match file {
-                Ok(f) => files.push(f.file_name()),
-                Err(e) => println!("Error reading file: {:#?}", e),
-            }
-        }
-
-        let event = SetEvent {
-            group_name: group_name.to_string(),
-            album_name,
-            tipe,
-            files,
-        };
-
-        tx.send(DirectoryUpdateEvent::Set(event)).unwrap();
-    }
 }
 
 fn deep_list(base: &PathBuf, filter_depth: usize, search_depth: usize) -> Vec<PathBuf> {

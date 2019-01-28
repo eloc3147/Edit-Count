@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<Error>> {
     let settings_root = app_root(AppDataType::UserConfig, &APP_INFO)?;
 
     // Load settings
-    let settings = Settings::new(&settings_root)?;
+    let settings = Settings::from(settings_root.join("settings.toml"))?;
     let settings = Arc::new(settings);
 
     // Scan directories
@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<Error>> {
 
     // Start web interface
     let address = String::from("127.0.0.1:2183");
-    let _ = UIServer::launch(address.clone());
+    let ui_server = UIServer::new(address.clone()).start();
     println!("Server started at {}", address);
 
     while let Ok(event) = cue_rx.recv() {
@@ -37,6 +37,7 @@ fn main() -> Result<(), Box<Error>> {
     }
 
     watcher.wait();
+    ui_server.wait();
 
     Ok(())
 }

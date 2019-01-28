@@ -1,32 +1,25 @@
+use crate::worker::Worker;
 use gotham::handler::assets::FileOptions;
 use gotham::router::builder::{build_simple_router, DefineSingleRoute, DrawRoutes};
 use std::env;
 use std::error::Error;
 use std::path::PathBuf;
-use std::thread;
 
 pub struct UIServer {
-    handle: thread::JoinHandle<()>,
+    address: String,
 }
 
 impl UIServer {
-    pub fn launch(address: String) -> UIServer {
-        let handle = thread::spawn(|| {
-            UIServerWorker::launch(address);
-        });
-
-        UIServer { handle }
-    }
-
-    pub fn join(self) {
-        self.handle.join().unwrap();
+    pub fn new(address: String) -> UIServer {
+        UIServer { address }
     }
 }
 
-struct UIServerWorker;
+impl Worker for UIServer {
+    type W = UIServer;
+    const NAME: &'static str = "UI Server";
 
-impl UIServerWorker {
-    pub fn launch(address: String) {
+    fn work(self) {
         let static_path = exe_dir()
             .expect("Unable to find static files directory")
             .join("static");
@@ -41,7 +34,7 @@ impl UIServerWorker {
             );
         });
 
-        gotham::start(address, router);
+        gotham::start(self.address, router);
     }
 }
 

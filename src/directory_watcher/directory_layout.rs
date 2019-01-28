@@ -55,7 +55,7 @@ impl error::Error for LayoutError {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct DirectoryLayout {
     #[serde(deserialize_with = "deserialize_dirs")]
     pub raw_dirs: Vec<DirectoryPath>,
@@ -65,26 +65,26 @@ pub struct DirectoryLayout {
 
 pub type DirectoryPath = Vec<PathComponent>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PathComponent {
     Album(Album),
     Group(Group),
     Dir(PathBuf),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Group {
     pub depth: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Album {
     pub min: usize,
     pub max: usize,
     pub tipe: AlbumType,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AlbumType {
     Single,
     Depth,

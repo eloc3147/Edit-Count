@@ -21,4 +21,5 @@ notifications:
 before_script:
   - rustup component add clippy-preview
 script:
+  - cargo fmt --all -- --check
   - cargo clippy --all-targets --all-features -- -D warnings

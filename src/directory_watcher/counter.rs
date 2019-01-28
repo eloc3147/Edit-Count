@@ -42,10 +42,6 @@ impl Counter {
             tree: Arc::new(RwLock::new(CountTree::new())),
         }
     }
-
-    pub fn get_tree_reference(&self) -> Arc<RwLock<CountTree>> {
-        self.tree.clone()
-    }
 }
 
 impl Worker for Counter {
@@ -55,10 +51,10 @@ impl Worker for Counter {
     fn work(self) {
         while let Ok(event) = self.due_rx.recv() {
             let cue = match event {
-                DirectoryUpdateEvent::Exist(path) => {
+                DirectoryUpdateEvent::Exist(_path) => {
                     unimplemented!();
                 }
-                DirectoryUpdateEvent::Remove(path) => {
+                DirectoryUpdateEvent::Remove(_path) => {
                     unimplemented!();
                 }
                 DirectoryUpdateEvent::Set(event) => self.tree.write().unwrap().set(event),

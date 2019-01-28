@@ -33,11 +33,16 @@ impl Worker for DirectoryWatcher {
         let (listener_tx, listener_rx) = channel();
         let (due_tx, due_rx) = channel();
 
-        let listener = Listener::launch(self.settings.clone(), listener_tx).unwrap();
-        let crawler = Crawler::launch(self.settings.clone(), due_tx.clone());
+        let listener = Listener::new(
+            self.settings.watch_frequency,
+            self.settings.directory_layout.clone(),
+            listener_tx,
+        )
+        .start();
+
+        let crawler = Crawler::new(self.settings.directory_layout.clone(), due_tx.clone()).start();
 
         let counter = Counter::new(due_rx, self.cue_tx);
-        let tree = counter.get_tree_reference();
         let counter = counter.start();
 
         while let Ok(listener_event) = listener_rx.recv() {
@@ -55,8 +60,8 @@ impl Worker for DirectoryWatcher {
         }
 
         counter.wait();
-        listener.join();
-        crawler.join();
+        listener.wait();
+        crawler.wait();
     }
 }
 
