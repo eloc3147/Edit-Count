@@ -19,6 +19,7 @@ notifications:
     on_success: never
 
 before_script:
+  - rustup component add rustfmt
   - rustup component add clippy-preview
 script:
   - cargo fmt --all -- --check
