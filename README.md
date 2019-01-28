@@ -1,6 +1,6 @@
 # Edit Count
 
-[![Build Status](https://travis-ci.com/eloc3147/edit_count.svg?branch=master)](https://travis-ci.com/eloc3147/edit_count)
+[![Build Status](https://travis-ci.com/eloc3147/edit_count.svg?branch=rust-port)](https://travis-ci.com/eloc3147/edit_count)
 
 Blurb
 
