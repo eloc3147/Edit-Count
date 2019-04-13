@@ -23,6 +23,13 @@ The config file has the following format.
 # Decreasing this value will increase responsiveness, at the cost of CPU usage
 watch_frequency=1000
 
+# Port on which to acces the web UI
+web_port = 52220
+
+# Port for the web UI to connect to connect to the backend
+# Must be different from web_port
+ws_port = 52221
+
 # See Directory Layout section below
 [directory_layout]
     raw_dirs = ['']

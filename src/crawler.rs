@@ -1,21 +1,21 @@
 use super::directory_layout::{AlbumType, DirectoryLayout, PathComponent};
 use super::{DirectoryUpdateEvent, GroupType, SetEvent};
-use crate::worker::Worker;
+use crate::worker::{Worker, WorkerResult};
+use derive_new::new;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
-#[derive(Debug)]
+#[derive(Debug, new)]
 pub struct Crawler {
     layout: DirectoryLayout,
     due_tx: Sender<DirectoryUpdateEvent>,
 }
 
-impl Crawler {
-    pub fn new(layout: DirectoryLayout, due_tx: Sender<DirectoryUpdateEvent>) -> Crawler {
-        Crawler { layout, due_tx }
-    }
+impl Worker for Crawler {
+    type W = Crawler;
+    const NAME: &'static str = "Crawler";
 
-    fn crawl(&self) {
+    fn work(self) -> WorkerResult {
         let mut paths = Vec::new();
         for path in self.layout.raw_dirs.iter() {
             paths.push((GroupType::Raw, path));
@@ -138,19 +138,12 @@ impl Crawler {
                         files,
                     };
 
-                    self.due_tx.send(DirectoryUpdateEvent::Set(event)).unwrap();
+                    self.due_tx.send(DirectoryUpdateEvent::Set(event))?;
                 }
             }
         }
-    }
-}
 
-impl Worker for Crawler {
-    type W = Crawler;
-    const NAME: &'static str = "Crawler";
-
-    fn work(self) {
-        self.crawl();
+        Ok(())
     }
 }
 
