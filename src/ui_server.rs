@@ -1,25 +1,33 @@
-use crate::worker::Worker;
+pub mod websockets_server;
+
+use self::websockets_server::WebsocketsServer;
+use crate::counter::CounterHandle;
+use crate::worker::{Worker, WorkerResult};
+use crate::CountUpdateEvent;
+use derive_new::new;
 use gotham::handler::assets::FileOptions;
 use gotham::router::builder::{build_simple_router, DefineSingleRoute, DrawRoutes};
 use std::env;
 use std::error::Error;
 use std::path::PathBuf;
+use std::sync::mpsc::Receiver;
 
+#[derive(new)]
 pub struct UIServer {
-    address: String,
-}
-
-impl UIServer {
-    pub fn new(address: String) -> UIServer {
-        UIServer { address }
-    }
+    web_port: u16,
+    ws_port: u16,
+    cue_rx: Receiver<CountUpdateEvent>,
+    counter_handle: CounterHandle,
 }
 
 impl Worker for UIServer {
     type W = UIServer;
     const NAME: &'static str = "UI Server";
 
-    fn work(self) {
+    fn work(self) -> WorkerResult {
+        // Start Websockets server
+        let wss = WebsocketsServer::new(self.ws_port, self.cue_rx, self.counter_handle).start()?;
+
         let static_path = exe_dir()
             .expect("Unable to find static files directory")
             .join("static");
@@ -34,7 +42,10 @@ impl Worker for UIServer {
             );
         });
 
-        gotham::start(self.address, router);
+        gotham::start(format!("127.0.0.1:{}", self.web_port), router);
+        wss.join()?;
+
+        Ok(())
     }
 }
 
